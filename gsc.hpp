@@ -1,22 +1,25 @@
 #ifndef _GSC_HPP_
 #define _GSC_HPP_
 
-typedef void (*Scr_FunctionCall)(int);
+typedef void (*SCRIPTFUNCTIONCALL)(int);
 
 typedef struct
 {
 	const char* name;
-	Scr_FunctionCall call;
+	SCRIPTFUNCTIONCALL call;
 	int developer;
-} Scr_Function;
+} SCRIPTFUNCTION;
 
-typedef Scr_FunctionCall (*Scr_GetFunction_t)(const char**, int*);
+typedef SCRIPTFUNCTIONCALL (*Scr_GetFunction_t)(const char**, int*);
+typedef SCRIPTFUNCTIONCALL (*Scr_GetMethod_t)(const char**, int*);
 
 void GScr_printconsole(int);
 
-Scr_FunctionCall Scr_GetCustomFunction(const char**, int*);
+SCRIPTFUNCTIONCALL Scr_GetCustomFunction(const char**, int*);
+SCRIPTFUNCTIONCALL Scr_GetCustomMethod(const char**, int*);
 
-extern Scr_Function scriptFunctions[];
+extern SCRIPTFUNCTION scriptFunctions[];
+extern SCRIPTFUNCTION scriptMethods[];
 
 #ifdef __cplusplus
 extern "C" {

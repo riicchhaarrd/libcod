@@ -55,6 +55,40 @@
 	#define PLAYERSTATE_VELOCITY(playerid) 0
 #endif
 
+/*
+======
+ENTITY
+======
+*/
+
+void EntCmd_setBounds(int a1) {
+	float w, h;
+	stackGetParamFloat(0, &w);
+	stackGetParamFloat(1, &h);
+	int base = gentities + gentities_size * a1;
+	*(float*)(base + 280) = h;
+	*(float*)(base + 276) = w;
+	*(float*)(base + 272) = w;
+	*(float*)(base + 264) = -w;
+	*(float*)(base + 260) = -w;
+}
+
+void EntCmd_setFloat(int self) {
+	int off;
+	stackGetParamInt(0, &off);
+	float f;
+	stackGetParamFloat(1, &f);
+	int base = gentities + self * gentities_size;
+	*(float*)(base + off) = f;
+}
+
+void EntCmd_getFloat(int self) {
+	int off;
+	stackGetParamInt(0, &off);
+	int base = gentities + self * gentities_size;
+	stackPushFloat(*(float*)(base+off));
+}
+
 int gsc_player_velocity_set()
 {
 	int playerid;
@@ -465,8 +499,47 @@ int gsc_player_spectatorclient_get()
 	return stackPushEntity(gentities + spectatorClient * gentities_size);
 }
 
+void PlayerCmd_GetUserInfoKey(int self) {
+	void (*SV_GetUserinfo)(int, char*, int);
+	*((int *)(&SV_GetUserinfo)) = 0x8092B00;
+	
+	char* (*Info_ValueForKey)(char*, char*);
+	*((int *)(&Info_ValueForKey)) = 0x80B7FC4;
+	
+	char userinfo[1024];
+	SV_GetUserinfo(self, userinfo, sizeof(userinfo));
+	if(!userinfo) {
+		stackPushString("");
+		return;
+	}
+	
+	char* key;
+	stackGetParamString(0, &key);
+	char* value = Info_ValueForKey(userinfo, key);
+	if(!value)
+		stackPushString("");
+	else
+		stackPushString(value);
+}
 
-
+void PlayerCmd_GetSpectatorClients(int self) {
+	int entity;
+	int spectating;
+	
+	int array = alloc_object_and_push_to_array();
+	//int maxclients = Cvar_VariableValue("sv_maxclients");
+	for(unsigned int i = 0; i < 64; i++) { //hardcoding since cba to find cvar_variablevalue or maxclients offset
+		entity = playerStates + i * sizeOfPlayer;
+		if(!*(int*)entity)
+			continue;
+		spectating = *(unsigned char *)(entity + 0xCC);
+		if(spectating != self)
+			continue;
+			
+		stackPushEntity(gentities + i * gentities_size);
+		push_previous_var_in_array_sub();
+	}
+}
 
 int gsc_player_getip()
 {

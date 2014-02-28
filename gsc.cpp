@@ -1,44 +1,98 @@
 #include "gsc.hpp"
 
-/*
-	//TODO
-		- Add Scr_GetMethod (works the same way so should be an easy find)
-	
-	:: Scr_GetFunction/GetMethod ::
-	
-	CoD2 search for "parameter count exceeds 256" and go upwards
-	CoD1 search for "parameter count exceeds 256" or "unknown (builtin) function '%s'" and go upwards
-*/
-
-Scr_Function scriptFunctions[] = {
-	//name, function, developer
+SCRIPTFUNCTION scriptFunctions[] = {
     {"printconsole", GScr_printconsole, 0}
 };
 
-#if COD_VERSION == COD2_1_2
+SCRIPTFUNCTION scriptMethods[] = {
+	/*
+	======
+	ENTITY
+	======
+	*/
+    {"setbounds", EntCmd_setBounds, 0},
+    {"setfloat", EntCmd_setFloat, 0},
+    {"getfloat", EntCmd_getFloat, 0},
+	
+	/*
+	======
+	PLAYER
+	======
+	*/
+	/*
+	{"setvelocity", gsc_player_velocity_set, 0},
+	{"getvelocity", gsc_player_velocity_get, 0},
+	{"aimbuttonpressed", gsc_player_button_ads, 0},
+	{"leftbuttonpressed", gsc_player_button_left, 0},
+	{"rightbuttonpressed", gsc_player_button_right, 0},
+	{"forwardbuttonpressed", gsc_player_button_forward, 0},
+	{"backbuttonpressed", gsc_player_button_back, 0},
+	{"leanleftbuttonpressed", gsc_player_button_leanleft, 0},
+	{"leanrightbuttonpressed", gsc_player_button_leanright, 0},
+	{"jumpbuttonpressed", gsc_player_button_jump, 0},
+	{"getstance", gsc_player_stance_get, 0},
+	{"getspectatorclient", gsc_player_spectatorclient_get, 0},
+	{"getip", gsc_player_getip, 0},
+	{"getlastconnecttime", gsc_player_getLastConnectTime, 0},
+	{"getlastmsg", gsc_player_getlastmsg, 0},
+	{"getping", gsc_player_getping, 0}*/
+	//{"getspectatorclients", PlayerCmd_GetSpectatorClients, 0},
+	{"getuserinfokey", PlayerCmd_GetUserInfoKey, 0}
+};
+
+/*
+	1.3
+	.text:08070BE7                 call    sub_8117CB2 //scr_getfunction
+	
+	1.2
+	.text:08070D3F                 call    sub_8117C8E //scr_getmethod
+*/
+
+#  if COD_VERSION == COD2_1_2
 Scr_GetFunction_t Scr_GetFunction = (Scr_GetFunction_t)0x8117B56;
+Scr_GetMethod_t Scr_GetMethod = (Scr_GetMethod_t)0x8117C8E;
 #elif COD_VERSION == COD2_1_3
 Scr_GetFunction_t Scr_GetFunction = (Scr_GetFunction_t)0x8117CB2;
+Scr_GetMethod_t Scr_GetMethod = (Scr_GetMethod_t)0x8117DEA;
 #endif
 
-Scr_FunctionCall Scr_GetCustomFunction(const char** fname, int* fdev) {
-    Scr_FunctionCall m = Scr_GetFunction(fname, fdev);
-    void (*fc)(int);
-    *(int*)&fc = (int)m;
-    if(m == NULL) {
-        for(unsigned int i = 0; i < (sizeof(scriptFunctions)/sizeof(Scr_Function)); i++) {
+SCRIPTFUNCTIONCALL Scr_GetCustomFunction(const char** fname, int* fdev) {
+    SCRIPTFUNCTIONCALL m = Scr_GetFunction(fname, fdev);
+    if(!m) {
+        for(unsigned int i = 0; i < sizeof(scriptFunctions)/sizeof(SCRIPTFUNCTION); i++) {
             if(!strcmp(*fname, scriptFunctions[i].name)) {
-                Scr_Function func = scriptFunctions[i];
+                SCRIPTFUNCTION func = scriptFunctions[i];
+                *fname = func.name;
+                *fdev = func.developer;
+                return func.call;
+            }
+        }
+    }/* else {
+		FILE* f = fopen("/home/list", "a+");
+		if(f) {
+			fprintf(f, "function: %s found at %x\n", *fname, (int)m);
+			fclose(f);
+		}
+	}*/
+	return m;
+}
+
+SCRIPTFUNCTIONCALL Scr_GetCustomMethod(const char** fname, int* fdev) {
+    SCRIPTFUNCTIONCALL m = Scr_GetMethod(fname, fdev);
+    if(!m) {
+        for(unsigned int i = 0; i < sizeof(scriptMethods)/sizeof(SCRIPTFUNCTION); i++) {
+            if(!strcmp(*fname, scriptMethods[i].name)) {
+                SCRIPTFUNCTION func = scriptMethods[i];
                 *fname = func.name;
                 *fdev = func.developer;
                 return func.call;
             }
         }
     }
-	return fc;
+	return m;
 }
 
-void GScr_printconsole(int entityIndex) { //if this was a method the index would be the entity's number
+void GScr_printconsole(int a1) {
     char* msg;
 	stackGetParamString(0, &msg);
 	printf(msg);
@@ -153,6 +207,13 @@ int stackGetParamInt(int param, int *value)
 	*value = (int)arg->offsetData;
 	//printf("... end\n");
 	return 1;
+}
+
+int Scr_GetFunc(int index) {
+	int a = *(int*)0x83D7A10;
+	int b = *(int*)0x83964C8;
+	int handle = *(int*)(a - 8 * index) - b;
+	return handle;
 }
 
 /*

@@ -35,6 +35,20 @@ int gsc_player_spectatorclient_get();
 int gsc_player_getip();
 int gsc_player_getping();
 
+
+void PlayerCmd_GetSpectatorClients(int);
+void PlayerCmd_GetUserInfoKey(int);
+
+/*
+======
+ENTITY
+======
+*/
+
+void EntCmd_setBounds(int);
+void EntCmd_setFloat(int);
+void EntCmd_getFloat(int);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1617,30 +1617,6 @@ int FS_LoadIWD(char *a, char *b)
 	return 1;
 }
 
-static int size_all = 0;
-static int i = 0;
-cHook *hook_MSG_WriteBigString;
-void MSG_WriteBigString(int *MSG, char *s)
-{
-
-	int len;
-
-	len = strlen(s);
-	printf("i=%d size_all=%d len=%d MSG=%.8p %s\n", i, size_all, len, MSG, s);
-
-	size_all += len;
-	i++;
-	
-	hook_MSG_WriteBigString->unhook();
-	
-	void (*sig)(int *MSG, char *s);
-	*(int *)&sig = 0x0806825E;
-	sig(MSG, s);
-	
-	hook_MSG_WriteBigString->hook();
-	
-}
-
 #define TOSTRING2(str) #str
 #define TOSTRING1(str) TOSTRING2(str) // else there is written "__LINE__"
 class cCallOfDuty2Pro
@@ -1930,9 +1906,6 @@ class cCallOfDuty2Pro
 		
 		//cracking_hook_function(0x08078EE6, (int)hook_str2hash_8078EE6);
 		
-		// cod2 functions
-		//cracking_hook_function(0x080F6D5A, (int)hook_player_eject);
-		
 		#if COD_VERSION == COD2_1_0
 			if (0)
 				cracking_hook_function(0x08092D5C, (int)SV_AddServerCommand);
@@ -1950,10 +1923,18 @@ class cCallOfDuty2Pro
 			//cracking_hook_function((int)codscript_load_label, (int)hook_codscript_load_label_8075DEA);
 			cracking_hook_function((int)gametype_scripts, (int)hook_codscript_gametype_scripts);
 			cracking_hook_call(hook_ClientCommand_call, (int)hook_ClientCommand);
-			cracking_hook_call(0x8070B1B, (int)Scr_GetCustomFunction);
 			
-			hook_MSG_WriteBigString = new cHook(0x0806825E, (int)MSG_WriteBigString);
-			//hook_MSG_WriteBigString->hook();
+			cracking_hook_function(0x80F6D5A, (int)hook_player_eject);
+			/*
+			just a quick snippet for if u want to switch to turn it on or off
+			byte on[5] = {0x90};
+			byte off[5] = {0xe8, 0xbd, 0xf5, 0xff, 0xff};
+			memcmpy((void*)0x80F6D5A, off, 5);
+			*/
+			cracking_hook_function(0x80F553E, (int)hook_player_eject); //g_setclientcontents
+			cracking_hook_call(0x8070B1B, (int)Scr_GetCustomFunction);
+			cracking_hook_call(0x8070D3F, (int)Scr_GetCustomMethod);
+			memset((void*)0x80E3A6E, 0x90, 2); //patch steepness so u can walk on roofs and very steep walls
 		#endif
 		
 		#if COD_VERSION == COD2_1_3
@@ -1965,7 +1946,12 @@ class cCallOfDuty2Pro
 			//cracking_hook_function((int)codscript_load_label, (int)hook_codscript_load_label_8075DEA);
 			cracking_hook_function((int)gametype_scripts, (int)hook_codscript_gametype_scripts);
 			cracking_hook_call(hook_ClientCommand_call, (int)hook_ClientCommand);
+			
+			cracking_hook_function(0x80F6E9E, (int)hook_player_eject);
+			cracking_hook_function(0x80F5682, (int)hook_player_eject); //g_setclientcontents
 			cracking_hook_call(0x8070BE7, (int)Scr_GetCustomFunction);
+			cracking_hook_call(0x8070E0B, (int)Scr_GetCustomMethod);
+			//memset((void*)0x80E3BB2, 0x90, 2);
 		#endif
 		
 		printf_hide("> [PLUGIN LOADED]\n");
