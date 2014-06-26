@@ -650,6 +650,273 @@ int hook_ClientCommand(int clientNum)
 }
 
 
+#define MAX_STRING_CHARS    1024    // max length of a string passed to Cmd_TokenizeString
+#define MAX_STRING_TOKENS   256     // max tokens resulting from Cmd_TokenizeString
+#define MAX_TOKEN_CHARS     1024    // max length of an individual token
+
+#define MAX_INFO_STRING     1024
+#define MAX_INFO_KEY        1024
+#define MAX_INFO_VALUE      1024
+
+#define BIG_INFO_STRING     8192    // used for system info key only
+#define BIG_INFO_KEY        8192
+#define BIG_INFO_VALUE      8192
+
+#define MAX_QPATH           64      // max length of a quake game pathname
+#define MAX_OSPATH          256     // max length of a filesystem pathname
+
+// rain - increased to 36 to match MAX_NETNAME, fixes #13 - UI stuff breaks
+// with very long names
+#define MAX_NAME_LENGTH     36      // max length of a client name
+
+#define MAX_SAY_TEXT        150
+
+#define MAX_BINARY_MESSAGE  32768   // max length of binary message
+
+int Q_stricmpn( const char *s1, const char *s2, int n ) {
+	int c1, c2;
+
+	do {
+		c1 = *s1++;
+		c2 = *s2++;
+
+		if ( !n-- ) {
+			return 0;       // strings are equal until end point
+		}
+
+		if ( c1 != c2 ) {
+			if ( c1 >= 'a' && c1 <= 'z' ) {
+				c1 -= ( 'a' - 'A' );
+			}
+			if ( c2 >= 'a' && c2 <= 'z' ) {
+				c2 -= ( 'a' - 'A' );
+			}
+			if ( c1 != c2 ) {
+				return c1 < c2 ? -1 : 1;
+			}
+		}
+	} while ( c1 );
+
+	return 0;       // strings are equal
+}
+
+int Q_strncmp( const char *s1, const char *s2, int n ) {
+	int c1, c2;
+
+	do {
+		c1 = *s1++;
+		c2 = *s2++;
+
+		if ( !n-- ) {
+			return 0;       // strings are equal until end point
+		}
+
+		if ( c1 != c2 ) {
+			return c1 < c2 ? -1 : 1;
+		}
+	} while ( c1 );
+
+	return 0;       // strings are equal
+}
+
+int Q_stricmp( const char *s1, const char *s2 ) {
+	return ( s1 && s2 ) ? Q_stricmpn( s1, s2, 99999 ) : -1;
+}
+
+
+void __cdecl Com_sprintf( char *dest, int size, const char *fmt, ... ) {
+	int ret;
+	va_list argptr;
+
+	va_start( argptr,fmt );
+	ret = vsnprintf( dest, size, fmt, argptr );
+	va_end( argptr );
+	if ( ret == -1 ) {
+		printf( "Com_sprintf: overflow of %i bytes buffer\n", size );
+	}
+}
+
+/*
+===================
+Info_RemoveKey
+===================
+*/
+void Info_RemoveKey( char *s, const char *key ) {
+	char    *start;
+	char pkey[MAX_INFO_KEY];
+	char value[MAX_INFO_VALUE];
+	char    *o;
+
+	if ( strlen( s ) >= MAX_INFO_STRING ) {
+		printf("Info_RemoveKey: oversize infostring [%s] [%s]", s, key );
+		return;
+	}
+
+	if ( strchr( key, '\\' ) ) {
+		return;
+	}
+
+	while ( 1 )
+	{
+		start = s;
+		if ( *s == '\\' ) {
+			s++;
+		}
+		o = pkey;
+		while ( *s != '\\' )
+		{
+			if ( !*s ) {
+				return;
+			}
+			*o++ = *s++;
+		}
+		*o = 0;
+		s++;
+
+		o = value;
+		while ( *s != '\\' && *s )
+		{
+			if ( !*s ) {
+				return;
+			}
+			*o++ = *s++;
+		}
+		*o = 0;
+
+		if ( !Q_stricmp( key, pkey ) ) {
+			// rain - arguments to strcpy must not overlap
+			//strcpy (start, s);	// remove this part
+			memmove( start, s, strlen( s ) + 1 ); // remove this part
+			return;
+		}
+
+		if ( !*s ) {
+			return;
+		}
+	}
+
+}
+
+
+/*
+==================
+Info_SetValueForKey
+
+Changes or adds a key/value pair
+==================
+*/
+void Info_SetValueForKey( char *s, const char *key, const char *value ) {
+	char newi[MAX_INFO_STRING];
+
+	if ( strlen( s ) >= MAX_INFO_STRING ) {
+		printf("Info_SetValueForKey: oversize infostring [%s] [%s] [%s]", s, key, value );
+		return;
+	}
+
+	if ( strchr( key, '\\' ) || strchr( value, '\\' ) ) {
+		printf("Can't use keys or values with a \\\n" );
+		return;
+	}
+
+	if ( strchr( key, ';' ) || strchr( value, ';' ) ) {
+		printf( "Can't use keys or values with a semicolon\n" );
+		return;
+	}
+
+	if ( strchr( key, '\"' ) || strchr( value, '\"' ) ) {
+		printf( "Can't use keys or values with a \"\n" );
+		return;
+	}
+
+	Info_RemoveKey( s, key );
+	if ( !value || !strlen( value ) ) {
+		return;
+	}
+
+	Com_sprintf( newi, sizeof( newi ), "\\%s\\%s", key, value );
+
+	if ( strlen( newi ) + strlen( s ) > MAX_INFO_STRING ) {
+		printf( "Info string length exceeded\n" );
+		return;
+	}
+
+	strcat( s, newi );
+}
+
+void SV_UserinfoChanged( int* cl ) {
+	//only 1.2, feel free to find the offsets for other patches/games.
+	// - riicchhaarrd
+	
+	void (*SV_GetUserinfo)(int, char*, int);
+	*((int *)(&SV_GetUserinfo)) = 0x8092B00;
+	
+	char* (*Info_ValueForKey)(char*, char*);
+	*((int *)(&Info_ValueForKey)) = 0x80B7FC4;
+	
+	void (*userinfochanged_func)(int*);
+	*(int*)&userinfochanged_func = 0x8090738;
+	
+	//printf("cl = %x\nuserinfo = %s\n", cl, userinfo);
+	
+	char* request_name = Info_ValueForKey((char *)(cl + 12), "name");
+	
+	//printf("request_name = %s\n", request_name);
+	
+	char newname[32] = {0};
+	int i, j;
+	
+	j = 0;
+	
+	for(i = 0; i < strlen(request_name); i++) {
+		if(i > 31)
+			break;
+		if(request_name[i] < 32 || request_name[i] > 126)
+			continue;
+		newname[j++] = request_name[i];
+	}
+	
+	Info_SetValueForKey((char *)(cl + 12), "name", newname);
+	
+	userinfochanged_func(cl);
+}
+
+void Cmd_Say_f(int* ent, int mode, bool arg0) {
+	//only 1.2, feel free to find the offsets for other patches/games.
+	// - riicchhaarrd
+	if( trap_Argc() < 2 && !arg0) {
+		return;
+	}
+
+	//printf("we got a message broskies!!!\nent = %x\nmode=%d\narg0=%d\n", ent, mode, arg0);
+	
+	void (*G_Say)( int* ent, int* target, int mode, const char* chatText );
+	*(int*)&G_Say = 0x80ff5f0;
+
+	char* (*ConcatArgs)(int start);
+	*(int*)&ConcatArgs = 0x80FE06C;
+
+	char* msg = ConcatArgs(1); //cod2 never uses arg0 lolz
+	
+	//printf("The message = %s\n", msg);
+	
+	
+	char line[1024] = {0};
+	int i,j;
+	
+	j = 0;
+	
+	for(i = 0; i < strlen(msg); i++) {
+		if(i > 1023)
+			break;
+		if(msg[i] < 32 || msg[i] > 126)
+			continue;
+		line[j++] = msg[i];
+	}
+	
+	
+	G_Say(ent, NULL, mode, line);
+}
+
 // Cmd_AddCommand("stupidTestFunction", stupidTestFunction);
 void stupidTestFunction()
 {
@@ -1934,7 +2201,22 @@ class cCallOfDuty2Pro
 			cracking_hook_function(0x80F553E, (int)hook_player_eject); //g_setclientcontents
 			cracking_hook_call(0x8070B1B, (int)Scr_GetCustomFunction);
 			cracking_hook_call(0x8070D3F, (int)Scr_GetCustomMethod);
+			/*
+			
+			- riicchhaarrd
+			
 			memset((void*)0x80E3A6E, 0x90, 2); //patch steepness so u can walk on roofs and very steep walls
+			
+			//noclip spectator and speed 800 for spectator
+			*(int*)0x80F4F93 = 0;
+			*(int*)0x80F4F0F = 800;
+			*/
+			
+			cracking_hook_call(0x8100D9B, (int)Cmd_Say_f);
+			cracking_hook_call(0x8100DD5, (int)Cmd_Say_f);
+			
+			cracking_hook_call(0x808EE47, (int)SV_UserinfoChanged);
+			cracking_hook_call(0x80909A2, (int)SV_UserinfoChanged);
 		#endif
 		
 		#if COD_VERSION == COD2_1_3
